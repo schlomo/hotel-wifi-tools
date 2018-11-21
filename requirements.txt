@@ -1,0 +1,3 @@
+wordlist
+requests
+more_itertools
